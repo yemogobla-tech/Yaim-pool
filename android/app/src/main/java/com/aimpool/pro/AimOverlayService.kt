@@ -162,9 +162,9 @@ class AimOverlayService : Service() {
         val width = metrics.widthPixels
         val height = metrics.heightPixels
         if (manual) {
-            cueHandle = addHandle("B", Color.WHITE, (width * .30f).toInt(), (height * .52f).toInt(), diameter) { updateAim() }
-            targetHandle = addHandle("C", Color.GREEN, (width * .62f).toInt(), (height * .47f).toInt(), diameter) { updateAim() }
-            angleHandle = addHandle("V", Color.YELLOW, (width * .20f).toInt(), (height * .56f).toInt(), diameter) { updateAim() }
+            cueHandle = addHandle("B", Color.WHITE, (width * .30f).toInt(), (height * .52f).toInt(), diameter, onMoved = { updateAim() })
+            targetHandle = addHandle("C", Color.GREEN, (width * .62f).toInt(), (height * .47f).toInt(), diameter, onMoved = { updateAim() })
+            angleHandle = addHandle("V", Color.YELLOW, (width * .20f).toInt(), (height * .56f).toInt(), diameter, onMoved = { updateAim() })
         }
         modeHandle = addHandle("AIM", Color.CYAN, (width * .08f).toInt(), (height * .15f).toInt(), diameter,
             onMoved = {}, onTapped = { toggleStealthMode() })

@@ -179,7 +179,7 @@ object PhysicsEngine2D {
 
         // 3. Trajectoire de la bille cible (direction de l'impact + rebonds éventuels)
         val targetSegments = mutableListOf<RaySegment>()
-        var targetStart = objectBallCenter
+        var targetStart: Point = objectBallCenter
         var targetDir = impactNormal
 
         for (bounce in 0..1) { // 1 rebond max pour la bille cible généralement utile
