@@ -78,6 +78,9 @@ jobs:
           if not ((project / 'app').is_dir() or (project / 'build.gradle').exists()
                   or (project / 'build.gradle.kts').exists()):
               raise SystemExit(f'Gradle project appears incomplete: {project}')
+          layout = project / 'app/src/main/res/layout/activity_main.xml'
+          layout_text = layout.read_text(encoding='utf-8')
+          layout.write_text(layout_text.replace('3-Lignes & Trajectoires', '3-Lignes &amp; Trajectoires'), encoding='utf-8')
           catalog = project / 'gradle' / 'libs.versions.toml'
           if not catalog.is_file():
               catalog.parent.mkdir(parents=True, exist_ok=True)
