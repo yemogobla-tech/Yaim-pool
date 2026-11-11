@@ -1,0 +1,3 @@
+#!/bin/sh
+# Gradle startup script for POSIX systems
+exec gradle "$@"

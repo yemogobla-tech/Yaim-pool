@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/dark_bg"
+    android:fillViewport="true">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="20dp">
+
+        <!-- En-tête de marque -->
+        <TextView
+            android:id="@+id/txtHeaderTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AIM POOL PRO"
+            android:textColor="@color/gold_accent"
+            android:textSize="26sp"
+            android:textStyle="bold"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/txtHeaderSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Assistant manuel de trajectoires et rebonds"
+            android:textColor="@color/text_muted"
+            android:textSize="13sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtHeaderTitle" />
+
+        <!-- Carte de statut du service -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            app:cardBackgroundColor="@color/dark_surface"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/border_color"
+            app:strokeWidth="1dp"
+            app:layout_constraintTop_toBottomOf="@id/txtHeaderSubtitle">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/txtServiceStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="STATUT : PRÊT"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/txtPermissionStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Vérification des permissions..."
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGrantPermission"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="12dp"
+                    android:text="Accorder la Superposition d'Écran"
+                    android:textColor="@color/dark_bg"
+                    app:backgroundTint="@color/gold_accent"
+                    app:cornerRadius="8dp" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Bouton Démarrer / Arrêter principal -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnToggleOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="20dp"
+            android:text="START — VISÉE AUTOMATIQUE"
+            android:textColor="@color/dark_bg"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            app:backgroundTint="@color/gold_accent"
+            app:cornerRadius="12dp"
+            app:layout_constraintTop_toBottomOf="@id/cardStatus" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnManualOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:text="Mode manuel"
+            android:textColor="@color/text_primary"
+            app:backgroundTint="@color/dark_surface"
+            app:layout_constraintTop_toBottomOf="@id/btnToggleOverlay" />
+
+        <!-- Carte de configuration rapide -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            app:cardBackgroundColor="@color/dark_surface"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/border_color"
+            app:strokeWidth="1dp"
+            app:layout_constraintTop_toBottomOf="@id/btnManualOverlay">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="RÉGLAGE DU RAYON DE BILLE"
+                    android:textColor="@color/gold_accent"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/sliderBallRadius"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:value="24.0"
+                    android:valueFrom="16.0"
+                    android:valueTo="36.0"
+                    android:stepSize="1.0"
+                    app:thumbColor="@color/gold_accent"
+                    app:trackColorActive="@color/gold_accent"
+                    app:trackColorInactive="@color/border_color" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSaveSettings"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="10dp"
+                    android:text="Enregistrer la Taille des Billes"
+                    android:textColor="@color/text_primary"
+                    app:backgroundTint="@color/dark_surface"
+                    app:cornerRadius="8dp"
+                    app:strokeColor="@color/border_color"
+                    app:strokeWidth="1dp" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Note de sécurité Anti-Ban -->
+        <TextView
+            android:id="@+id/txtSecurityFooter"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="20dp"
+            android:gravity="center"
+            android:text="Place B sur la bille blanche, C sur la bille cible et V dans la direction opposée au tir. Déplace les poignées sans bloquer le jeu."
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            app:layout_constraintTop_toBottomOf="@id/cardSettings"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>

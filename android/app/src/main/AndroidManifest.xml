@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.aimpool.pro">
+
+    <!-- Permissions requises pour l'overlay de superposition d'écran -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    
+    <!-- Retour haptique lors des réglages fins -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_aim_crosshair"
+        android:label="@string/app_name"
+        android:roundIcon="@drawable/ic_aim_crosshair"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AimPoolPro"
+        tools:targetApi="34">
+
+        <!-- Écran d'accueil principal -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AimPoolPro">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Service d'overlay en premier plan à double fenêtre WindowManager -->
+        <service
+            android:name=".AimOverlayService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse|mediaProjection"
+            tools:targetApi="34">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Aim assistant real-time screen overlay with non-intrusive physics projection" />
+        </service>
+
+    </application>
+
+</manifest>

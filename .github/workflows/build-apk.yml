@@ -1,7 +1,9 @@
-          name: Build AimPoolPro APK
+name: Build AimPoolPro APK
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -28,9 +30,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -41,10 +40,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -f android/settings.gradle.kts ]]; then
+            echo "dir=android" >> "$GITHUB_OUTPUT"
+            echo 'Using reviewable Android sources in android/'
+            exit 0
+          fi
           python3 - <<'PY'
           from pathlib import Path
           from zipfile import ZipFile
           import os, stat
+          from shutil import copyfile
 
           archives = sorted(Path('.').glob('*.zip'))
           if len(archives) != 1:
@@ -78,6 +83,16 @@ jobs:
           if not ((project / 'app').is_dir() or (project / 'build.gradle').exists()
                   or (project / 'build.gradle.kts').exists()):
               raise SystemExit(f'Gradle project appears incomplete: {project}')
+          layout = project / 'app/src/main/res/layout/activity_main.xml'
+          layout_text = layout.read_text(encoding='utf-8')
+          layout.write_text(layout_text.replace('3-Lignes & Trajectoires', '3-Lignes &amp; Trajectoires'), encoding='utf-8')
+          physics = project / 'app/src/main/java/com/aimpool/pro/PhysicsEngine2D.kt'
+          physics_text = physics.read_text(encoding='utf-8')
+          physics.write_text(physics_text.replace('var targetStart = objectBallCenter', 'var targetStart: Point = objectBallCenter'), encoding='utf-8')
+          catalog = project / 'gradle' / 'libs.versions.toml'
+          if not catalog.is_file():
+              catalog.parent.mkdir(parents=True, exist_ok=True)
+              copyfile(Path('gradle/libs.versions.toml'), catalog)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               print(f'dir={project}', file=output)
           print(f'Using Android project: {project}')
@@ -88,7 +103,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -f gradlew ]]; then
+          if [[ -f gradlew && -f gradle/wrapper/gradle-wrapper.jar ]]; then
             chmod +x gradlew
             ./gradlew assembleDebug --no-daemon --stacktrace
           else
