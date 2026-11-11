@@ -138,7 +138,9 @@ class OverlayTrajectoryView(context: Context) : View(context) {
             ballRadius = ballRadius,
             table = tableBounds,
             pockets = pockets,
-            maxBounces = 3,
+            // Automatic capture supplies a direction but no verified object ball.
+            // Only draw the first ray; reflected paths would ignore collisions.
+            maxBounces = if (aim.target == null) 0 else 3,
             spinVertical = aim.spinV,
             spinHorizontal = aim.spinH
         )
