@@ -97,7 +97,7 @@ class OverlayTrajectoryView(context: Context) : View(context) {
         val left = w * .195f
         val right = w * .805f
         val top = h * .20f
-        val bottom = h * .82f
+        val bottom = h * .90f
         tableBounds = PhysicsEngine2D.TableBounds(left, top, right, bottom)
         val midX = (left + right) / 2f
         val radius = ballRadius * 1.6f

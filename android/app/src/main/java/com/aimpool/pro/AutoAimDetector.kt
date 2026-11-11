@@ -98,7 +98,7 @@ class AutoAimDetector(
         val left = (w * .19f).toInt()
         val right = (w * .81f).toInt()
         val top = (h * .20f).toInt()
-        val bottom = (h * .82f).toInt()
+        val bottom = (h * .90f).toInt()
 
         // The real table has blue felt across this region. Menus contain white
         // text and circular icons that otherwise look like balls/guidelines.

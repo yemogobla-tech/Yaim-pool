@@ -150,6 +150,8 @@ class AimOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
+            // Match the full-screen capture, including the landscape cutout.
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             x = 0
             y = 0
             // Android 12+ only passes game touches through a sufficiently
