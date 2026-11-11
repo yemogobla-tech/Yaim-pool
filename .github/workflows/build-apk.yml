@@ -47,6 +47,7 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile
           import os, stat
+          from shutil import copyfile
 
           archives = sorted(Path('.').glob('*.zip'))
           if len(archives) != 1:
@@ -80,6 +81,10 @@ jobs:
           if not ((project / 'app').is_dir() or (project / 'build.gradle').exists()
                   or (project / 'build.gradle.kts').exists()):
               raise SystemExit(f'Gradle project appears incomplete: {project}')
+          catalog = project / 'gradle' / 'libs.versions.toml'
+          if not catalog.is_file():
+              catalog.parent.mkdir(parents=True, exist_ok=True)
+              copyfile(Path('gradle/libs.versions.toml'), catalog)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               print(f'dir={project}', file=output)
           print(f'Using Android project: {project}')
