@@ -81,6 +81,9 @@ jobs:
           layout = project / 'app/src/main/res/layout/activity_main.xml'
           layout_text = layout.read_text(encoding='utf-8')
           layout.write_text(layout_text.replace('3-Lignes & Trajectoires', '3-Lignes &amp; Trajectoires'), encoding='utf-8')
+          physics = project / 'app/src/main/java/com/aimpool/pro/PhysicsEngine2D.kt'
+          physics_text = physics.read_text(encoding='utf-8')
+          physics.write_text(physics_text.replace('var targetStart = objectBallCenter', 'var targetStart: Point = objectBallCenter'), encoding='utf-8')
           catalog = project / 'gradle' / 'libs.versions.toml'
           if not catalog.is_file():
               catalog.parent.mkdir(parents=True, exist_ok=True)
