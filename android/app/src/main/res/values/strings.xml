@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Aim Pool Pro</string>
+    <string name="app_name">Aim Pool Auto (test)</string>
     <string name="overlay_service_running">Lignes de visée 3-bandes actives</string>
 </resources>

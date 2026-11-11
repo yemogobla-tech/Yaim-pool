@@ -30,7 +30,7 @@ android {
         }
         debug {
             isDebuggable = true
-            applicationIdSuffix = ".debug"
+            applicationIdSuffix = ".auto"
         }
     }
 
