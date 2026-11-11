@@ -6,25 +6,26 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Prepare or Repair Android Project
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Générer et compiler le projet Android AimPoolPro
         run: |
+          set -e
           if ls *.zip 1> /dev/null 2>&1; then
-            unzip -o *.zip
-          fi
-          # Si le zip s'est extrait dans un sous-dossier, remonter les fichiers à la racine
-          SUBDIR=$(find . -maxdepth 2 -name "AndroidManifest.xml" | head -n 1)
-          if [ -n "$SUBDIR" ] && [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-            mkdir -p app/src/main/java/com/aimpool/pro
-            cp "$SUBDIR" app/src/main/AndroidManifest.xml || true
-            find . -name "*.kt" -exec cp {} app/src/main/java/com/aimpool/pro/ \; || true
+            unzip -o *.zip || true
           fi
 
-          # Garantir des fichiers Gradle et Manifest 100% compatibles AGP 8.2 / SDK 34
+          mkdir -p app/src/main/java/com/aimpool/pro
+
           cat << 'EOG' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -58,7 +59,6 @@ jobs:
           android.nonTransitiveRClass=true
           EOG
 
-          mkdir -p app/src/main/java/com/aimpool/pro
           cat << 'EOG' > app/build.gradle.kts
           plugins {
               id("com.android.application")
@@ -125,62 +125,7 @@ jobs:
           </manifest>
           EOM
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Gradle 8.7
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
-      - name: Build Debug APK (with auto-fallback)
-        run: |
-          if [ -f "app/src/main/java/com/aimpool/pro/MainActivity.kt" ] && gradle assembleDebug --stacktrace; then
-            echo "Build réussi avec les fichiers du ZIP"
-          else
-            echo "Génération des fichiers Kotlin autonomes vérifiés..."
-            rm -f app/src/main/java/com/aimpool/pro/*.kt
-            cat << 'EOM' > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-              <application
-                  android:allowBackup="true"
-                  android:icon="@android:drawable/sym_def_app_icon"
-                  android:label="Aim Pool Pro"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.AppCompat.NoActionBar">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:screenOrientation="sensorLandscape">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-                  <service
-                      android:name=".AimOverlayService"
-                      android:enabled="true"
-                      android:exported="false"
-                      android:foregroundServiceType="specialUse">
-                      <property
-                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                          android:value="billiards_training_guide_overlay" />
-                  </service>
-              </application>
-          </manifest>
-          EOM
-
-            cat << 'EOK' > app/src/main/java/com/aimpool/pro/PhysicsEngine2D.kt
+          cat << 'EOK' > app/src/main/java/com/aimpool/pro/PhysicsEngine2D.kt
           package com.aimpool.pro
           import kotlin.math.*
 
@@ -278,7 +223,7 @@ jobs:
           }
           EOK
 
-            cat << 'EOK' > app/src/main/java/com/aimpool/pro/OverlayTrajectoryView.kt
+          cat << 'EOK' > app/src/main/java/com/aimpool/pro/OverlayTrajectoryView.kt
           package com.aimpool.pro
           import android.content.Context
           import android.graphics.*
@@ -341,7 +286,6 @@ jobs:
                   val buttY = cueBall.y - sin(angleRad) * handleDist
                   canvas.drawLine(cueBall.x, cueBall.y, buttX, buttY, tablePaint)
                   canvas.drawCircle(buttX, buttY, table.ballRadius * 0.95f, handlePaint)
-                  // Molette de précision à droite
                   canvas.drawRoundRect(w * 0.91f, h * 0.22f, w * 0.97f, h * 0.78f, 18f, 18f, wheelPaint)
               }
 
@@ -381,7 +325,7 @@ jobs:
           }
           EOK
 
-            cat << 'EOK' > app/src/main/java/com/aimpool/pro/AimOverlayService.kt
+          cat << 'EOK' > app/src/main/java/com/aimpool/pro/AimOverlayService.kt
           package com.aimpool.pro
           import android.app.*
           import android.content.Context
@@ -476,7 +420,7 @@ jobs:
           }
           EOK
 
-            cat << 'EOK' > app/src/main/java/com/aimpool/pro/MainActivity.kt
+          cat << 'EOK' > app/src/main/java/com/aimpool/pro/MainActivity.kt
           package com.aimpool.pro
           import android.content.Intent
           import android.graphics.Color
@@ -531,11 +475,14 @@ jobs:
           }
           EOK
 
-            gradle assembleDebug --stacktrace
-          fi
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
+          curl -sL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
+          unzip -q -o /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.7/bin/gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AimPoolPro-Debug-APK
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: app/build/outputs/apk/debug/app-debug.apk
