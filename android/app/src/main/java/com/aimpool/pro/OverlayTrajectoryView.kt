@@ -124,6 +124,12 @@ class OverlayTrajectoryView(context: Context) : View(context) {
         calculate(aim)
     }
 
+    fun clearAim() {
+        lastAim = null
+        currentSolution = null
+        postInvalidateOnAnimation()
+    }
+
     private fun calculate(aim: AimInput) {
         currentSolution = PhysicsEngine2D.calculateAim(
             cueCenter = aim.cue,

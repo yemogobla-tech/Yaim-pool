@@ -103,12 +103,17 @@ class AimOverlayService : Service() {
                 val projection = manager.getMediaProjection(resultCode, data)
                 val metrics = resources.displayMetrics
                 detector?.stop()
-                detector = AutoAimDetector(projection, metrics.widthPixels, metrics.heightPixels,
-                    metrics.densityDpi) { x, y, angle ->
-                    trajectoryOverlayView?.post {
-                        trajectoryOverlayView?.updateAim(PhysicsEngine2D.Point(x, y), null, angle, 0f, 0f)
+                detector = AutoAimDetector(
+                    projection, metrics.widthPixels, metrics.heightPixels, metrics.densityDpi,
+                    onAim = { x, y, angle ->
+                        trajectoryOverlayView?.post {
+                            trajectoryOverlayView?.updateAim(PhysicsEngine2D.Point(x, y), null, angle, 0f, 0f)
+                        }
+                    },
+                    onAimLost = {
+                        trajectoryOverlayView?.post { trajectoryOverlayView?.clearAim() }
                     }
-                }.also { it.start() }
+                ).also { it.start() }
             }
             "START_MANUAL" -> {
                 val type = if (Build.VERSION.SDK_INT >= 34)

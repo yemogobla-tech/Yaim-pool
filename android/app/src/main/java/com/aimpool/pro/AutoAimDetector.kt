@@ -19,7 +19,8 @@ class AutoAimDetector(
     initialWidth: Int,
     initialHeight: Int,
     private val densityDpi: Int,
-    private val onAim: (Float, Float, Float) -> Unit
+    private val onAim: (Float, Float, Float) -> Unit,
+    private val onAimLost: () -> Unit
 ) {
     private val thread = HandlerThread("AimPoolVision").apply { start() }
     private val handler = Handler(thread.looper)
@@ -30,6 +31,7 @@ class AutoAimDetector(
     private var lastFrame = 0L
     private var lastCueX = -1f
     private var lastCueY = -1f
+    private var lineVisible = false
 
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() = stop()
@@ -75,12 +77,20 @@ class AutoAimDetector(
         reader = next
         lastCueX = -1f
         lastCueY = -1f
+        lost()
+    }
+
+    private fun lost() {
+        if (lineVisible) {
+            lineVisible = false
+            onAimLost()
+        }
     }
 
     private fun analyze(image: Image) {
         val w = image.width
         val h = image.height
-        if (w <= h) return // Menus are portrait; the table is landscape.
+        if (w <= h) { lost(); return } // Menus are portrait; the table is landscape.
         val plane = image.planes.firstOrNull() ?: return
         val pixels = plane.buffer
         val stride = plane.rowStride
@@ -89,6 +99,21 @@ class AutoAimDetector(
         val right = (w * .81f).toInt()
         val top = (h * .20f).toInt()
         val bottom = (h * .82f).toInt()
+
+        // The real table has blue felt across this region. Menus contain white
+        // text and circular icons that otherwise look like balls/guidelines.
+        var feltSamples = 0
+        for (fy in floatArrayOf(.30f, .50f, .70f)) {
+            for (fx in floatArrayOf(.25f, .50f, .75f)) {
+                val i = (h * fy).toInt() * stride + (w * fx).toInt() * pixelStride
+                if (i + 2 >= pixels.limit()) continue
+                val r = pixels.get(i).toInt() and 255
+                val g = pixels.get(i + 1).toInt() and 255
+                val b = pixels.get(i + 2).toInt() and 255
+                if (r < 150 && g > r + 20 && b > g + 5) feltSamples++
+            }
+        }
+        if (feltSamples < 7) { lost(); return }
 
         fun pale(x: Int, y: Int): Boolean {
             if (x !in 0 until w || y !in 0 until h) return false
@@ -101,9 +126,8 @@ class AutoAimDetector(
                 max(r, max(g, b)) - min(r, min(g, b)) < 55
         }
 
-        var best = 0
-        var cueX = -1
-        var cueY = -1
+        data class Candidate(val x: Int, val y: Int, val score: Int)
+        val candidates = ArrayList<Candidate>(32)
         for (y in top + 12 until bottom - 12 step 2) {
             for (x in left + 12 until right - 12 step 2) {
                 if (!pale(x, y)) continue
@@ -119,56 +143,72 @@ class AutoAimDetector(
                     if (!pale(rx, ry)) outside++
                 }
                 val score = inside * 2 + outside * 3
-                val sticky = if (lastCueX >= 0 &&
-                    kotlin.math.abs(x * 2f - lastCueX) < 60f &&
-                    kotlin.math.abs(y * 2f - lastCueY) < 60f) 4 else 0
-                if (score + sticky > best) {
-                    best = score + sticky
-                    cueX = x
-                    cueY = y
+                if (score < 54) continue
+                val near = candidates.indexOfFirst {
+                    kotlin.math.abs(it.x - x) < 12 && kotlin.math.abs(it.y - y) < 12
+                }
+                if (near >= 0) {
+                    if (score > candidates[near].score) candidates[near] = Candidate(x, y, score)
+                } else if (candidates.size < 32) {
+                    candidates.add(Candidate(x, y, score))
+                } else {
+                    val lowest = candidates.indices.minByOrNull { candidates[it].score } ?: continue
+                    if (score > candidates[lowest].score) candidates[lowest] = Candidate(x, y, score)
                 }
             }
         }
-        if (cueX < 0 || best < 42) return
+        if (candidates.isEmpty()) { lost(); return }
 
-        var weightedX = 0
-        var weightedY = 0
-        var count = 0
-        for (dy in -8..8) for (dx in -8..8) {
-            if (dx * dx + dy * dy <= 64 && pale(cueX + dx, cueY + dy)) {
-                weightedX += cueX + dx
-                weightedY += cueY + dy
-                count++
-            }
-        }
-        if (count > 0) {
-            cueX = weightedX / count
-            cueY = weightedY / count
-        }
-
-        var bestAngle = 0
+        var bestX = -1
+        var bestY = -1
+        var bestAngle = -1
         var bestLine = 0
-        for (degrees in 0 until 360 step 2) {
-            val rad = Math.toRadians(degrees.toDouble())
-            val dx = cos(rad)
-            val dy = sin(rad)
-            for (offset in -6..6) {
-                var score = 0
-                for (distance in 15..110 step 3) {
-                    val sx = cueX + (dx * distance - dy * offset).toInt()
-                    val sy = cueY + (dy * distance + dx * offset).toInt()
-                    if (sx !in left until right || sy !in top until bottom) break
-                    if (pale(sx, sy)) score++
+        for (candidate in candidates) {
+            var cueX = candidate.x
+            var cueY = candidate.y
+            var weightedX = 0
+            var weightedY = 0
+            var count = 0
+            for (dy in -8..8) for (dx in -8..8) {
+                if (dx * dx + dy * dy <= 64 && pale(cueX + dx, cueY + dy)) {
+                    weightedX += cueX + dx
+                    weightedY += cueY + dy
+                    count++
                 }
-                if (score > bestLine) {
-                    bestLine = score
-                    bestAngle = degrees
+            }
+            if (count > 0) {
+                cueX = weightedX / count
+                cueY = weightedY / count
+            }
+
+            for (degrees in 0 until 360 step 4) {
+                val rad = Math.toRadians(degrees.toDouble())
+                val dx = cos(rad)
+                val dy = sin(rad)
+                for (offset in -6..6 step 2) {
+                    var score = 0
+                    for (distance in 15..110 step 4) {
+                        val sx = cueX + (dx * distance - dy * offset).toInt()
+                        val sy = cueY + (dy * distance + dx * offset).toInt()
+                        if (sx !in left until right || sy !in top until bottom) break
+                        if (pale(sx, sy)) score++
+                    }
+                    val sticky = if (lastCueX >= 0 &&
+                        kotlin.math.abs(cueX * 2f - lastCueX) < 50f &&
+                        kotlin.math.abs(cueY * 2f - lastCueY) < 50f) 2 else 0
+                    if (score + sticky > bestLine) {
+                        bestLine = score + sticky
+                        bestAngle = degrees
+                        bestX = cueX
+                        bestY = cueY
+                    }
                 }
             }
         }
-        if (bestLine < 14) return
-        lastCueX = cueX * 2f
-        lastCueY = cueY * 2f
+        if (bestLine < 11 || bestX < 0) { lost(); return }
+        lastCueX = bestX * 2f
+        lastCueY = bestY * 2f
+        lineVisible = true
         onAim(lastCueX, lastCueY, bestAngle.toFloat())
     }
 
