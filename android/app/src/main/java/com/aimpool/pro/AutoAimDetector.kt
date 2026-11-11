@@ -162,17 +162,22 @@ class AutoAimDetector(
         var bestX = -1
         var bestY = -1
         var bestAngle = -1
-        var bestLine = 0
+        var bestRank = -1
+        var selectedLine = 0
         for (candidate in candidates) {
             var cueX = candidate.x
             var cueY = candidate.y
             var weightedX = 0
             var weightedY = 0
             var count = 0
+            var warmth = 0
             for (dy in -8..8) for (dx in -8..8) {
                 if (dx * dx + dy * dy <= 64 && pale(cueX + dx, cueY + dy)) {
                     weightedX += cueX + dx
                     weightedY += cueY + dy
+                    val i = (cueY + dy) * stride + (cueX + dx) * pixelStride
+                    warmth += (pixels.get(i).toInt() and 255) -
+                        (pixels.get(i + 2).toInt() and 255)
                     count++
                 }
             }
@@ -180,6 +185,9 @@ class AutoAimDetector(
                 cueX = weightedX / count
                 cueY = weightedY / count
             }
+            // The cue ball on the observed table is cream-colored; pure-white
+            // stripes on target balls receive no bonus in an otherwise tied ray.
+            val warmBonus = if (count > 0) min(6, max(0, warmth / count / 4)) else 0
 
             for (degrees in 0 until 360 step 4) {
                 val rad = Math.toRadians(degrees.toDouble())
@@ -196,8 +204,10 @@ class AutoAimDetector(
                     val sticky = if (lastCueX >= 0 &&
                         kotlin.math.abs(cueX * 2f - lastCueX) < 50f &&
                         kotlin.math.abs(cueY * 2f - lastCueY) < 50f) 2 else 0
-                    if (score + sticky > bestLine) {
-                        bestLine = score + sticky
+                    val rank = score + sticky + warmBonus
+                    if (rank > bestRank) {
+                        bestRank = rank
+                        selectedLine = score
                         bestAngle = degrees
                         bestX = cueX
                         bestY = cueY
@@ -205,7 +215,7 @@ class AutoAimDetector(
                 }
             }
         }
-        if (bestLine < 11 || bestX < 0) { lost(); return }
+        if (selectedLine < 11 || bestX < 0) { lost(); return }
         lastCueX = bestX * 2f
         lastCueY = bestY * 2f
         lineVisible = true
