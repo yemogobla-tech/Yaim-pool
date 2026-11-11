@@ -91,13 +91,23 @@
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_marginTop="20dp"
-            android:text="DÉMARRER L'ASSISTANT MANUEL"
+            android:text="START — VISÉE AUTOMATIQUE"
             android:textColor="@color/dark_bg"
             android:textSize="15sp"
             android:textStyle="bold"
             app:backgroundTint="@color/gold_accent"
             app:cornerRadius="12dp"
             app:layout_constraintTop_toBottomOf="@id/cardStatus" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnManualOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:text="Mode manuel"
+            android:textColor="@color/text_primary"
+            app:backgroundTint="@color/dark_surface"
+            app:layout_constraintTop_toBottomOf="@id/btnToggleOverlay" />
 
         <!-- Carte de configuration rapide -->
         <com.google.android.material.card.MaterialCardView
@@ -110,7 +120,7 @@
             app:cardElevation="0dp"
             app:strokeColor="@color/border_color"
             app:strokeWidth="1dp"
-            app:layout_constraintTop_toBottomOf="@id/btnToggleOverlay">
+            app:layout_constraintTop_toBottomOf="@id/btnManualOverlay">
 
             <LinearLayout
                 android:layout_width="match_parent"

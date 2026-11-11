@@ -5,10 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.graphics.Color
+import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
@@ -34,20 +36,34 @@ class AimOverlayService : Service() {
     private var angleHandle: DraggableHandleView? = null
     private var modeHandle: DraggableHandleView? = null
     private var isStealthHidden = false
+    private var detector: AutoAimDetector? = null
+    private var windowsInitialized = false
 
     companion object {
         const val CHANNEL_ID = "AimPoolProOverlayChannel"
         const val NOTIFICATION_ID = 8881
         const val ACTION_STOP = "com.aimpool.pro.ACTION_STOP"
         const val ACTION_TOGGLE_STEALTH = "com.aimpool.pro.ACTION_TOGGLE_STEALTH"
+        const val ACTION_START_AUTO = "com.aimpool.pro.ACTION_START_AUTO"
+        const val EXTRA_PROJECTION_DATA = "projectionData"
+        const val EXTRA_RESULT_CODE = "resultCode"
 
         fun startService(context: Context) {
-            val intent = Intent(context, AimOverlayService::class.java)
+            val intent = Intent(context, AimOverlayService::class.java).apply { action = "START_MANUAL" }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
                 context.startService(intent)
             }
+        }
+
+        fun startAuto(context: Context, resultCode: Int, data: Intent) {
+            val intent = Intent(context, AimOverlayService::class.java).apply {
+                action = ACTION_START_AUTO
+                putExtra(EXTRA_RESULT_CODE, resultCode)
+                putExtra(EXTRA_PROJECTION_DATA, data)
+            }
+            context.startForegroundService(intent)
         }
 
         fun stopService(context: Context) {
@@ -60,9 +76,6 @@ class AimOverlayService : Service() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
-
-        initOverlayWindows()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -74,6 +87,36 @@ class AimOverlayService : Service() {
             ACTION_TOGGLE_STEALTH -> {
                 toggleStealthMode()
             }
+            ACTION_START_AUTO -> {
+                val type = if (Build.VERSION.SDK_INT >= 29)
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0
+                if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, buildNotification(), type)
+                else startForeground(NOTIFICATION_ID, buildNotification())
+                if (!windowsInitialized) initOverlayWindows(manual = false)
+                val data = if (Build.VERSION.SDK_INT >= 33)
+                    intent.getParcelableExtra(EXTRA_PROJECTION_DATA, Intent::class.java)
+                else @Suppress("DEPRECATION") intent.getParcelableExtra<Intent>(EXTRA_PROJECTION_DATA)
+                val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
+                if (data == null || resultCode != Activity.RESULT_OK) { stopSelf(); return START_NOT_STICKY }
+                val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                val projection = manager.getMediaProjection(resultCode, data)
+                val metrics = resources.displayMetrics
+                detector?.stop()
+                detector = AutoAimDetector(projection, metrics.widthPixels, metrics.heightPixels,
+                    metrics.densityDpi) { x, y, angle ->
+                    trajectoryOverlayView?.post {
+                        trajectoryOverlayView?.updateAim(PhysicsEngine2D.Point(x, y), null, angle, 0f, 0f)
+                    }
+                }.also { it.start() }
+            }
+            "START_MANUAL" -> {
+                val type = if (Build.VERSION.SDK_INT >= 34)
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
+                if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, buildNotification(), type)
+                else startForeground(NOTIFICATION_ID, buildNotification())
+                if (!windowsInitialized) initOverlayWindows(manual = true)
+            }
+            else -> { stopSelf(); return START_NOT_STICKY }
         }
         return START_STICKY
     }
@@ -83,7 +126,8 @@ class AimOverlayService : Service() {
     /**
      * Initialise les deux calques de fenêtres superposées.
      */
-    private fun initOverlayWindows() {
+    private fun initOverlayWindows(manual: Boolean) {
+        windowsInitialized = true
         // --- CALQUE 1 : Trajectoires de visée (100% Pass-Through, Zéro interception tactile) ---
         val trajectoryParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -113,12 +157,14 @@ class AimOverlayService : Service() {
         val diameter = (62f * metrics.density).toInt()
         val width = metrics.widthPixels
         val height = metrics.heightPixels
-        cueHandle = addHandle("B", Color.WHITE, (width * .30f).toInt(), (height * .52f).toInt(), diameter) { updateAim() }
-        targetHandle = addHandle("C", Color.GREEN, (width * .62f).toInt(), (height * .47f).toInt(), diameter) { updateAim() }
-        angleHandle = addHandle("V", Color.YELLOW, (width * .20f).toInt(), (height * .56f).toInt(), diameter) { updateAim() }
+        if (manual) {
+            cueHandle = addHandle("B", Color.WHITE, (width * .30f).toInt(), (height * .52f).toInt(), diameter) { updateAim() }
+            targetHandle = addHandle("C", Color.GREEN, (width * .62f).toInt(), (height * .47f).toInt(), diameter) { updateAim() }
+            angleHandle = addHandle("V", Color.YELLOW, (width * .20f).toInt(), (height * .56f).toInt(), diameter) { updateAim() }
+        }
         modeHandle = addHandle("AIM", Color.CYAN, (width * .08f).toInt(), (height * .15f).toInt(), diameter,
             onMoved = {}, onTapped = { toggleStealthMode() })
-        updateAim()
+        if (manual) updateAim()
     }
 
     private fun addHandle(
@@ -248,6 +294,8 @@ class AimOverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        detector?.stop()
+        detector = null
         trajectoryOverlayView?.let {
             windowManager.removeView(it)
             trajectoryOverlayView = null

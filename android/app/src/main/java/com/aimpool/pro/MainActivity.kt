@@ -1,6 +1,9 @@
 package com.aimpool.pro
 
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -21,6 +24,15 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var isOverlayRunning = false
+    private val captureLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            AimOverlayService.startAuto(this, result.resultCode, result.data!!)
+            isOverlayRunning = true
+            updateUiState()
+        }
+    }
 
     private val overlayPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -53,11 +65,17 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            if (isOverlayRunning) {
-                stopOverlayService()
-            } else {
-                startOverlayService()
+            if (isOverlayRunning) stopOverlayService()
+            else {
+                val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                captureLauncher.launch(manager.createScreenCaptureIntent())
             }
+        }
+
+        binding.btnManualOverlay.setOnClickListener {
+            if (!Settings.canDrawOverlays(this)) requestOverlayPermission()
+            else if (isOverlayRunning) stopOverlayService()
+            else startOverlayService()
         }
 
         binding.btnSaveSettings.setOnClickListener {
@@ -113,13 +131,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUiState() {
         if (isOverlayRunning) {
-            binding.btnToggleOverlay.text = "ARRÊTER L'ASSISTANT MANUEL"
+            binding.btnToggleOverlay.text = "ARRÊTER L'ASSISTANT"
             binding.btnToggleOverlay.setBackgroundColor(getColor(R.color.dark_surface))
             binding.btnToggleOverlay.setTextColor(getColor(R.color.error_red))
-            binding.txtServiceStatus.text = "STATUT : ASSISTANT MANUEL ACTIF"
+            binding.txtServiceStatus.text = "STATUT : ASSISTANT ACTIF"
             binding.txtServiceStatus.setTextColor(getColor(R.color.emerald_green))
         } else {
-            binding.btnToggleOverlay.text = "DÉMARRER L'ASSISTANT MANUEL"
+            binding.btnToggleOverlay.text = "START — VISÉE AUTOMATIQUE"
             binding.btnToggleOverlay.setBackgroundColor(getColor(R.color.gold_accent))
             binding.btnToggleOverlay.setTextColor(getColor(R.color.dark_bg))
             binding.txtServiceStatus.text = "STATUT : PRÊT À DÉMARRER"

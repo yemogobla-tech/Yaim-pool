@@ -29,7 +29,7 @@ class OverlayTrajectoryView(context: Context) : View(context) {
 
     // Peintures pré-allouées (zéro allocation dans onDraw)
     private val cueLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFFFFF")
+        color = Color.parseColor("#63FF73")
         strokeWidth = 3.5f
         style = Paint.Style.STROKE
     }
@@ -94,9 +94,9 @@ class OverlayTrajectoryView(context: Context) : View(context) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (w <= 0 || h <= 0) return
         // The game rotates to landscape; fixed portrait pixel bounds are invalid.
-        val left = w * .06f
-        val right = w * .94f
-        val top = h * .18f
+        val left = w * .195f
+        val right = w * .805f
+        val top = h * .20f
         val bottom = h * .82f
         tableBounds = PhysicsEngine2D.TableBounds(left, top, right, bottom)
         val midX = (left + right) / 2f

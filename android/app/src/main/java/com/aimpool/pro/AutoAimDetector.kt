@@ -1,7 +1,5 @@
 package com.aimpool.pro
 
-import android.annotation.SuppressLint
-import android.content.Context
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -10,120 +8,176 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.os.Handler
 import android.os.HandlerThread
-import kotlinx.coroutines.*
-import java.nio.ByteBuffer
-import kotlin.math.*
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
 
-/**
- * Module de Vision par Ordinateur utilisant MediaProjection.
- * Détecte la position de la bille blanche et l'orientation de la ligne de visée
- * générée nativement par 8 Ball Pool pour prolonger les 3 bandes automatiquement.
- * Sûr, local, 100% hors-ligne.
- */
+/** Reads the game's white guideline and cue ball from a user-approved screen capture. */
 class AutoAimDetector(
-    private val context: Context,
-    private val mediaProjection: MediaProjection,
-    private val screenWidth: Int,
-    private val screenHeight: Int,
-    private val screenDensity: Int,
-    private val onAutoAimDetected: (cueX: Float, cueY: Float, angleDegrees: Float) -> Unit
+    private val projection: MediaProjection,
+    initialWidth: Int,
+    initialHeight: Int,
+    private val densityDpi: Int,
+    private val onAim: (Float, Float, Float) -> Unit
 ) {
+    private val thread = HandlerThread("AimPoolVision").apply { start() }
+    private val handler = Handler(thread.looper)
+    private var reader: ImageReader? = null
+    private var display: VirtualDisplay? = null
+    private var width = initialWidth
+    private var height = initialHeight
+    private var lastFrame = 0L
+    private var lastCueX = -1f
+    private var lastCueY = -1f
 
-    private var imageReader: ImageReader? = null
-    private var virtualDisplay: VirtualDisplay? = null
-    private var backgroundThread: HandlerThread? = null
-    private var backgroundHandler: Handler? = null
-
-    private var isAnalyzing = false
-    private var lastProcessTime = 0L
-
-    fun start() {
-        backgroundThread = HandlerThread("AimVisionThread").apply { start() }
-        backgroundHandler = Handler(backgroundThread!!.looper)
-
-        // Utilise RGBA_8888 à résolution optimisée pour économiser le CPU/GPU
-        val processWidth = screenWidth / 2
-        val processHeight = screenHeight / 2
-
-        imageReader = ImageReader.newInstance(
-            processWidth, processHeight,
-            PixelFormat.RGBA_8888, 2
-        )
-
-        virtualDisplay = mediaProjection.createVirtualDisplay(
-            "AimPoolVisionDisplay",
-            processWidth, processHeight, screenDensity,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            imageReader!!.surface, null, backgroundHandler
-        )
-
-        imageReader?.setOnImageAvailableListener({ reader ->
-            val now = System.currentTimeMillis()
-            // Limite le traitement à ~25-30 FPS pour préserver la batterie
-            if (now - lastProcessTime < 35L) {
-                reader.acquireLatestImage()?.close()
-                return@setOnImageAvailableListener
-            }
-            lastProcessTime = now
-
-            val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
-            try {
-                processScreenFrame(image, processWidth, processHeight)
-            } finally {
-                image.close()
-            }
-        }, backgroundHandler)
+    private val projectionCallback = object : MediaProjection.Callback() {
+        override fun onStop() = stop()
+        override fun onCapturedContentResize(newWidth: Int, newHeight: Int) {
+            if (newWidth > 0 && newHeight > 0) handler.post { resize(newWidth, newHeight) }
+        }
     }
 
-    /**
-     * Analyse l'image du jeu pour trouver la bille blanche (amas de pixels blancs circulaires).
-     */
-    private fun processScreenFrame(image: Image, width: Int, height: Int) {
-        val planes = image.planes
-        val buffer: ByteBuffer = planes[0].buffer
-        val pixelStride = planes[0].pixelStride
-        val rowStride = planes[0].rowStride
+    fun start() {
+        projection.registerCallback(projectionCallback, handler)
+        val imageReader = makeReader(width, height)
+        reader = imageReader
+        display = projection.createVirtualDisplay(
+            "AimPoolCapture", width / 2, height / 2, densityDpi,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            imageReader.surface, null, handler
+        )
+    }
 
-        var sumX = 0L
-        var sumY = 0L
-        var whitePixelCount = 0
-
-        // Sous-échantillonnage de 4 pixels pour vitesse maximale
-        val step = 4
-        for (y in (height * 0.15).toInt() until (height * 0.85).toInt() step step) {
-            val rowOffset = y * rowStride
-            for (x in (width * 0.05).toInt() until (width * 0.95).toInt() step step) {
-                val index = rowOffset + x * pixelStride
-                if (index + 2 < buffer.remaining()) {
-                    val r = buffer.get(index).toInt() and 0xFF
-                    val g = buffer.get(index + 1).toInt() and 0xFF
-                    val b = buffer.get(index + 2).toInt() and 0xFF
-
-                    // Seuil de détection du blanc pur de la bille de billard
-                    if (r > 235 && g > 235 && b > 235) {
-                        sumX += x
-                        sumY += y
-                        whitePixelCount++
+    private fun makeReader(w: Int, h: Int): ImageReader =
+        ImageReader.newInstance(max(1, w / 2), max(1, h / 2), PixelFormat.RGBA_8888, 2).also { next ->
+            next.setOnImageAvailableListener({ source ->
+                val image = source.acquireLatestImage() ?: return@setOnImageAvailableListener
+                try {
+                    val now = System.currentTimeMillis()
+                    if (now - lastFrame >= 120L) {
+                        lastFrame = now
+                        analyze(image)
                     }
+                } finally { image.close() }
+            }, handler)
+        }
+
+    private fun resize(w: Int, h: Int) {
+        if (w == width && h == height) return
+        width = w
+        height = h
+        val next = makeReader(w, h)
+        display?.setSurface(null)
+        display?.resize(max(1, w / 2), max(1, h / 2), densityDpi)
+        display?.setSurface(next.surface)
+        reader?.close()
+        reader = next
+        lastCueX = -1f
+        lastCueY = -1f
+    }
+
+    private fun analyze(image: Image) {
+        val w = image.width
+        val h = image.height
+        if (w <= h) return // Menus are portrait; the table is landscape.
+        val plane = image.planes.firstOrNull() ?: return
+        val pixels = plane.buffer
+        val stride = plane.rowStride
+        val pixelStride = plane.pixelStride
+        val left = (w * .19f).toInt()
+        val right = (w * .81f).toInt()
+        val top = (h * .20f).toInt()
+        val bottom = (h * .82f).toInt()
+
+        fun pale(x: Int, y: Int): Boolean {
+            if (x !in 0 until w || y !in 0 until h) return false
+            val i = y * stride + x * pixelStride
+            if (i + 2 >= pixels.limit()) return false
+            val r = pixels.get(i).toInt() and 255
+            val g = pixels.get(i + 1).toInt() and 255
+            val b = pixels.get(i + 2).toInt() and 255
+            return r > 175 && g > 175 && b > 175 &&
+                max(r, max(g, b)) - min(r, min(g, b)) < 55
+        }
+
+        var best = 0
+        var cueX = -1
+        var cueY = -1
+        for (y in top + 12 until bottom - 12 step 2) {
+            for (x in left + 12 until right - 12 step 2) {
+                if (!pale(x, y)) continue
+                var inside = 0
+                for (dy in -3..3 step 2) for (dx in -3..3 step 2)
+                    if (pale(x + dx, y + dy)) inside++
+                if (inside < 9) continue
+                var outside = 0
+                for (a in 0 until 16) {
+                    val rad = a * Math.PI / 8.0
+                    val rx = x + (cos(rad) * 11).toInt()
+                    val ry = y + (sin(rad) * 11).toInt()
+                    if (!pale(rx, ry)) outside++
+                }
+                val score = inside * 2 + outside * 3
+                val sticky = if (lastCueX >= 0 &&
+                    kotlin.math.abs(x * 2f - lastCueX) < 60f &&
+                    kotlin.math.abs(y * 2f - lastCueY) < 60f) 4 else 0
+                if (score + sticky > best) {
+                    best = score + sticky
+                    cueX = x
+                    cueY = y
                 }
             }
         }
+        if (cueX < 0 || best < 42) return
 
-        if (whitePixelCount in 20..350) {
-            val detectedCenterX = (sumX.toFloat() / whitePixelCount) * 2f // Compensation sous-échelle
-            val detectedCenterY = (sumY.toFloat() / whitePixelCount) * 2f
-
-            // Transmet la position détectée
-            onAutoAimDetected(detectedCenterX, detectedCenterY, 0f)
+        var weightedX = 0
+        var weightedY = 0
+        var count = 0
+        for (dy in -8..8) for (dx in -8..8) {
+            if (dx * dx + dy * dy <= 64 && pale(cueX + dx, cueY + dy)) {
+                weightedX += cueX + dx
+                weightedY += cueY + dy
+                count++
+            }
         }
+        if (count > 0) {
+            cueX = weightedX / count
+            cueY = weightedY / count
+        }
+
+        var bestAngle = 0
+        var bestLine = 0
+        for (degrees in 0 until 360 step 2) {
+            val rad = Math.toRadians(degrees.toDouble())
+            val dx = cos(rad)
+            val dy = sin(rad)
+            for (offset in -6..6) {
+                var score = 0
+                for (distance in 15..110 step 3) {
+                    val sx = cueX + (dx * distance - dy * offset).toInt()
+                    val sy = cueY + (dy * distance + dx * offset).toInt()
+                    if (sx !in left until right || sy !in top until bottom) break
+                    if (pale(sx, sy)) score++
+                }
+                if (score > bestLine) {
+                    bestLine = score
+                    bestAngle = degrees
+                }
+            }
+        }
+        if (bestLine < 14) return
+        lastCueX = cueX * 2f
+        lastCueY = cueY * 2f
+        onAim(lastCueX, lastCueY, bestAngle.toFloat())
     }
 
     fun stop() {
-        virtualDisplay?.release()
-        virtualDisplay = null
-        imageReader?.close()
-        imageReader = null
-        backgroundThread?.quitSafely()
-        backgroundThread = null
+        display?.release()
+        display = null
+        reader?.close()
+        reader = null
+        projection.unregisterCallback(projectionCallback)
+        thread.quitSafely()
     }
 }
