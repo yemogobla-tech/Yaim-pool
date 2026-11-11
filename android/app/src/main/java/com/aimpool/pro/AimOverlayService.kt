@@ -20,7 +20,7 @@ import androidx.core.app.NotificationCompat
 
 /**
  * Service Android en premier plan gérant la superposition d'écran (Overlay).
- * Conçu pour être 100% sûr, non-intrusif, sans risque de ban :
+ * Affiche des trajectoires locales au-dessus du jeu :
  * - Calque 1 : Vue de dessin Canvas totalement transparente avec FLAG_NOT_TOUCHABLE.
  *   Laisse passer 100% des clics vers 8 Ball Pool.
  * - Calque 2 : Poignées de commande déplaçables et bouton furtif instantané.
@@ -78,6 +78,7 @@ class AimOverlayService : Service() {
         createNotificationChannel()
     }
 
+    @Suppress("DEPRECATION")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
@@ -95,7 +96,7 @@ class AimOverlayService : Service() {
                 if (!windowsInitialized) initOverlayWindows(manual = false)
                 val data = if (Build.VERSION.SDK_INT >= 33)
                     intent.getParcelableExtra(EXTRA_PROJECTION_DATA, Intent::class.java)
-                else @Suppress("DEPRECATION") intent.getParcelableExtra<Intent>(EXTRA_PROJECTION_DATA)
+                else intent.getParcelableExtra<Intent>(EXTRA_PROJECTION_DATA)
                 val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
                 if (data == null || resultCode != Activity.RESULT_OK) { stopSelf(); return START_NOT_STICKY }
                 val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -146,6 +147,9 @@ class AimOverlayService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = 0
             y = 0
+            // Android 12+ only passes game touches through a sufficiently
+            // translucent untrusted overlay (maximum obscuring opacity 0.8).
+            alpha = .75f
         }
 
         trajectoryOverlayView = OverlayTrajectoryView(this)
