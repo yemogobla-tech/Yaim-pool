@@ -1,4 +1,4 @@
-            name: Build AimPoolPro APK
+          name: Build AimPoolPro APK
 
 on:
   push:
@@ -39,7 +39,7 @@ jobs:
       - name: Extract Android project and validate its structure
         id: project
         shell: bash
-          run: |
+        run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
@@ -83,7 +83,7 @@ jobs:
           print(f'Using Android project: {project}')
           PY
 
-           - name: Compile debug APK
+      - name: Compile debug APK
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -121,4 +121,3 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 14
-          
