@@ -40,6 +40,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -f android/settings.gradle.kts ]]; then
+            echo "dir=android" >> "$GITHUB_OUTPUT"
+            echo 'Using reviewable Android sources in android/'
+            exit 0
+          fi
           python3 - <<'PY'
           from pathlib import Path
           from zipfile import ZipFile
@@ -98,7 +103,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -f gradlew ]]; then
+          if [[ -f gradlew && -f gradle/wrapper/gradle-wrapper.jar ]]; then
             chmod +x gradlew
             ./gradlew assembleDebug --no-daemon --stacktrace
           else
