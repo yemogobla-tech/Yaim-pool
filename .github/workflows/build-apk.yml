@@ -1,3 +1,67 @@
+            name: Build AimPoolPro APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aimpool-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Android debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Extract Android project and validate its structure
+        id: project
+        shell: bash
+          run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import os, stat
+
+          archives = sorted(Path('.').glob('*.zip'))
+          if len(archives) != 1:
+              raise SystemExit(f'Expected exactly one ZIP at repository root; found {len(archives)}: {archives}')
+
+          destination = Path('android-project').resolve()
+          destination.mkdir(exist_ok=True)
+          with ZipFile(archives[0]) as archive:
+              for info in archive.infolist():
+                  item = Path(info.filename)
+                  mode = info.external_attr >> 16
+                  if (item.is_absolute() or '..' in item.parts or
+                      stat.S_ISLNK(mode)):
+                      raise SystemExit(f'Unsafe ZIP entry: {info.filename}')
+                  target = (destination / item).resolve()
+                  if not target.is_relative_to(destination):
+                      raise SystemExit(f'Unsafe ZIP path: {info.filename}')
               archive.extractall(destination)
 
           candidates = set()
@@ -19,7 +83,7 @@
           print(f'Using Android project: {project}')
           PY
 
-      - name: Compile debug APK
+           - name: Compile debug APK
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -57,3 +121,4 @@
           path: dist/
           if-no-files-found: error
           retention-days: 14
+          
